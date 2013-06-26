@@ -19,7 +19,7 @@ HTILEW = 0.5 * TILEW
 
 def main():
 
-    global FPSCLOCK, DISPLAYSURF, BASICFONT, aSpriteSheet, unMapa, Camera
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, aSpriteSheet, unMapa, aCamera, tileList
         
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
@@ -36,49 +36,16 @@ def main():
         aChar.animations.append(bSpriteSheet.load_strip((0,directions*48,48,48), 8, colorkey=(0, 0, 0)))
         
     tileList = {}
-    CameraRange = 5,5    
-    command = (0,0)
     
-    CamaraMode = 'STATIC'
+    command = (0,0)   
     
-    if CamaraMode == 'DYNAMIC':
-        CameraRange = 10,10
-    
-    CameraIT = copy.copy(aChar.pos)
+    aCamera = Camera('DYNAMIC', aChar)
     
     while command != QUIT:
         
-        if CamaraMode == 'STATIC':
-            CameraIT = copy.deepcopy(aChar.pos)
-        else:
-            if aChar.pos[0] > (CameraIT[0] + (CameraRange[0] - 2)):
-                CameraIT[0] += 1
-            elif aChar.pos[0] < (CameraIT[0] - (CameraRange[0] - 1)):
-                CameraIT[0] -= 1
-            elif aChar.pos[1] > (CameraIT[1] + (CameraRange[1] - 2)):
-                CameraIT[1] += 1
-            elif aChar.pos[1] < (CameraIT[1] - (CameraRange[1] - 1)):
-                CameraIT[1] -= 1
-            else:
-                pass
-                
+        aCamera.update(aChar)
         
-        Camera = HALF + (CameraIT[0]*HTILEW) - (CameraIT[1]*HTILEW), (CameraIT[0] + CameraIT[1]) * HTILEH + 32
-        #tuple(map(int,getVertsOfTile(aChar.pos[0], aChar.pos[1])))
-        Camera = (Camera[0]-WINDOWWIDTH/2), (Camera[1]-WINDOWHEIGHT/2)
-         
-        if aChar.moving:
-            DISPLAYSURF.fill((0,0,0))
-            for layer, rows in unMapa.layers:
-                for Fila, row in filter(lambda (x,y): x < CameraIT[1] + CameraRange[1] and x > CameraIT[1] - CameraRange[1], enumerate(rows)):
-                    for Col, tile in filter(lambda (x,y): x < CameraIT[0] + CameraRange[0] and x > CameraIT[0] - CameraRange[0],enumerate(row)):
-                        if tile in tileList:
-                            drawtile(tileList[tile][0], Col, Fila)
-                        else:
-                            tileList[tile] =  aSpriteSheet.image_at((tile[0],tile[1],64,32), colorkey=(0, 0, 0))
-                            drawtile(tileList[tile][0], Col, Fila)
-         
-        
+        unMapa.draw(aCamera, aChar)
         
         if aChar.moving:                
             aChar.draw()
@@ -86,8 +53,6 @@ def main():
         command = getCommand()
         aChar.update(command)
           
-
-    
         pygame.display.update()
         FPSCLOCK.tick(FPS)
         
@@ -98,8 +63,48 @@ def getCommand ():
             return Key2Dir[event.key] , KEYUP
         elif event.type == pygame.KEYDOWN:   
             return Key2Dir[event.key] , KEYDOWN
-        return NONE, NONE
+        return NONE, NONE 
 
+class Camera(object):
+    x = 0
+    y = 0
+    xyTile = 0,0
+    mode = ''
+    xRange = 0
+    yRange = 0
+    
+    def __init__(self, aMode, aChar):
+        self.x = 0
+        self.y = 0
+        self.xyTile = 0,0
+        self.mode = aMode
+        
+        if self.mode == 'DYNAMIC':
+            self.xyTile = copy.copy(aChar.pos)
+            self.xRange, self.yRange = 10,10
+        else:
+            self.xRange, self.yRange = 5,5
+            self.xyTile = aChar.pos
+            
+        
+    def update(self, aChar):
+        if self.mode == 'DYNAMIC':
+            if aChar.pos[0] > (self.xyTile[0] + (self.xRange - 2)):
+                self.xyTile[0] += 1
+            elif aChar.pos[0] < (self.xyTile[0] - (self.xRange - 1)):
+                self.xyTile[0] -= 1
+            elif aChar.pos[1] > (self.xyTile[1] + (self.yRange - 2)):
+                self.xyTile[1] += 1
+            elif aChar.pos[1] < (self.xyTile[1] - (self.yRange - 1)):
+                self.xyTile[1] -= 1
+            else:
+                pass
+            
+        self.x = HALF + (self.xyTile[0]*HTILEW) - (self.xyTile[1]*HTILEW)
+        self.y =(self.xyTile[0] + self.xyTile[1]) * HTILEH + 32
+        #tuple(map(int,getVertsOfTile(aChar.pos[0], aChar.pos[1])))
+        self.x, self.y = (self.x - WINDOWWIDTH/2), (self.y - WINDOWHEIGHT/2)
+        
 class spritesheet(object):
     def __init__(self, filename):
         try:
@@ -135,11 +140,10 @@ class spritesheet(object):
 #   return X,Y
 
 def drawtile(tile, Col, Fila):
-    Y = (Col + Fila) * HTILEH + 32 - Camera[1]
-    X = HALF + (Col*HTILEW) - (Fila*HTILEW) - Camera[0]
+    Y = (Col + Fila) * HTILEH + 32 - aCamera.y
+    X = HALF + (Col*HTILEW) - (Fila*HTILEW) - aCamera.x
 
     DISPLAYSURF.blit(tile, (X,Y))
-
 
 def readMap(filename):
     assert os.path.exists(filename), 'No se puede encontrar el archivo' 
@@ -217,6 +221,18 @@ class mapObject:
     tilesetWidth = 0
     tilesetHeight = 0
     layers = []
+
+    def draw(self, aCamera, aChar):
+        if aChar.moving:
+            DISPLAYSURF.fill((0,0,0))
+            for layer, rows in self.layers:
+                for Fila, row in filter(lambda (x,y): x < aCamera.xyTile[1] + aCamera.yRange and x > aCamera.xyTile[1] - aCamera.yRange, enumerate(rows)):
+                    for Col, tile in filter(lambda (x,y): x < aCamera.xyTile[0] + aCamera.xRange and x > aCamera.xyTile[0] - aCamera.xRange, enumerate(row)):
+                        if tile in tileList:
+                            drawtile(tileList[tile][0], Col, Fila)
+                        else:
+                            tileList[tile] =  aSpriteSheet.image_at((tile[0],tile[1],64,32), colorkey=(0, 0, 0))
+                            drawtile(tileList[tile][0], Col, Fila)
 
 class character:
     animations = []
@@ -303,6 +319,5 @@ class character:
             self.state = (self.state + 1) % len(self.animations[FACINGS[self.facing]])
         
     
-
 if __name__ == '__main__':
     main()
