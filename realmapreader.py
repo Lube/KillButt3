@@ -28,6 +28,8 @@ def main():
     
     unMapa = readMap('pancamera.txt')
     
+    
+    
     aSpriteSheet = spritesheet(unMapa.tileset)
     bSpriteSheet = spritesheet('swordwalking.png')
     aChar = character()
@@ -41,6 +43,8 @@ def main():
     
     aCamera = Camera('DYNAMIC', aChar)
     
+    Collisionables = unMapa.getCollisionables()
+    
     while command != QUIT:
         
         aCamera.update(aChar)
@@ -51,7 +55,7 @@ def main():
             aChar.draw()
         
         command = getCommand()
-        aChar.update(command)
+        aChar.update(command, Collisionables)
           
         pygame.display.update()
         FPSCLOCK.tick(FPS)
@@ -221,6 +225,14 @@ class mapObject:
     tilesetWidth = 0
     tilesetHeight = 0
     layers = []
+    
+    def getCollisionables(self):
+        Collisionables = []
+        for y, row in enumerate(self.layers[2][1]):
+            for x, tile in enumerate(row):
+                    if tile != (960, -32):
+                        Collisionables.append((x, y))
+        return Collisionables
 
     def draw(self, aCamera, aChar):
         if aChar.moving:
@@ -244,7 +256,7 @@ class character:
     def draw(self):
         drawtile(self.animations[FACINGS[self.facing]][self.state][0], self.pos[0], self.pos[1])
         
-    def update(self, command):
+    def update(self, command, collisionables):
         if not self.moving and command[0] in [UP, DOWN, LEFT, RIGHT] and command[1] == KEYDOWN:
             #self.state = (self.state + 1) % len(self.animations[self.state])
             #self.pos[0] += command[0][0] * 0.1
@@ -312,12 +324,17 @@ class character:
         else:
             pass
             
-        if self.moving:
+        if self.moving and not self.willCollision(collisionables):
             self.pos[0] += self.facing[0] * 0.1
             self.pos[1] -= self.facing[1] * 0.1
 
             self.state = (self.state + 1) % len(self.animations[FACINGS[self.facing]])
         
-    
+    def willCollision (self, collisionables):
+        print ((self.pos[0] + (self.facing[0] * 0.1)),(self.pos[1] - (self.facing[1] * 0.1)))
+        if (int(self.pos[0] + (self.facing[0] * 0.1))+1,int(self.pos[1] - (self.facing[1] * 0.1))+1) in collisionables:
+            return True
+        return False
+            
 if __name__ == '__main__':
     main()
