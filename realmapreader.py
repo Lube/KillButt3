@@ -1,4 +1,4 @@
-import pygame, random, sys, time, math, os
+import pygame, random, sys, time, math, os, copy
 from pygame.locals import *
 
 RIGHT, UP, LEFT, DOWN = (1,1), (1,-1), (-1,-1), (-1,1)
@@ -8,14 +8,18 @@ FACINGS = {RIGHT:0, DOWN:1, NE:6, NO:3 ,UP:4 ,SE:5 ,SO:2 ,LEFT:7, (0,0): 0}
  
 Key2Dir   = {275: RIGHT, 273:DOWN, 276:LEFT, 274:UP, K_ESCAPE:QUIT}
 NONE = (0,0)
-FPS = 35
+FPS = 45
 WINDOWWIDTH, WINDOWHEIGHT = 1000, 700
 TILEH, TILEW, GAPSIZE = 32, 64, 1
 BOARDWIDTH = 15
+HALF = WINDOWWIDTH / 2
+HTILEH = 0.5 * TILEH
+HTILEW = 0.5 * TILEW
+
 
 def main():
 
-    global FPSCLOCK, DISPLAYSURF, BASICFONT, aSpriteSheet, aRock, aGrass, aWater, Camera
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, aSpriteSheet, unMapa, Camera
         
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
@@ -32,28 +36,55 @@ def main():
         aChar.animations.append(bSpriteSheet.load_strip((0,directions*48,48,48), 8, colorkey=(0, 0, 0)))
         
     tileList = {}
+    CameraRange = 5,5    
+    command = (0,0)
     
-    Camera = 10, 10
-    command = NONE, NONE
-
+    CamaraMode = 'STATIC'
+    
+    if CamaraMode == 'DYNAMIC':
+        CameraRange = 10,10
+    
+    CameraIT = copy.copy(aChar.pos)
+    
     while command != QUIT:
-        DISPLAYSURF.fill((0,0,0))
-        print Camera
-        Camera = tuple(map(int,getVertsOfTile(aChar.pos[0], aChar.pos[1])))
+        
+        if CamaraMode == 'STATIC':
+            CameraIT = copy.deepcopy(aChar.pos)
+        else:
+            if aChar.pos[0] > (CameraIT[0] + (CameraRange[0] - 2)):
+                CameraIT[0] += 1
+            elif aChar.pos[0] < (CameraIT[0] - (CameraRange[0] - 1)):
+                CameraIT[0] -= 1
+            elif aChar.pos[1] > (CameraIT[1] + (CameraRange[1] - 2)):
+                CameraIT[1] += 1
+            elif aChar.pos[1] < (CameraIT[1] - (CameraRange[1] - 1)):
+                CameraIT[1] -= 1
+            else:
+                pass
+                
+        
+        Camera = HALF + (CameraIT[0]*HTILEW) - (CameraIT[1]*HTILEW), (CameraIT[0] + CameraIT[1]) * HTILEH + 32
+        #tuple(map(int,getVertsOfTile(aChar.pos[0], aChar.pos[1])))
         Camera = (Camera[0]-WINDOWWIDTH/2), (Camera[1]-WINDOWHEIGHT/2)
-        for layer, tiles in unMapa.layers:
-            for pos, tile in enumerate(tiles):
-                posX, posY = pos % unMapa.width, pos // unMapa.width
-                if tile in tileList:
-                    drawtile(tileList[tile][0], posX, posY)
-                else:
-                    tileList[tile] =  aSpriteSheet.image_at((tile[0],tile[1],64,32), colorkey=(0, 0, 0))
-                    drawtile(tileList[tile][0], posX, posY)
-                    
+         
+        if aChar.moving:
+            DISPLAYSURF.fill((0,0,0))
+            for layer, rows in unMapa.layers:
+                for Fila, row in filter(lambda (x,y): x < CameraIT[1] + CameraRange[1] and x > CameraIT[1] - CameraRange[1], enumerate(rows)):
+                    for Col, tile in filter(lambda (x,y): x < CameraIT[0] + CameraRange[0] and x > CameraIT[0] - CameraRange[0],enumerate(row)):
+                        if tile in tileList:
+                            drawtile(tileList[tile][0], Col, Fila)
+                        else:
+                            tileList[tile] =  aSpriteSheet.image_at((tile[0],tile[1],64,32), colorkey=(0, 0, 0))
+                            drawtile(tileList[tile][0], Col, Fila)
+         
+        
+        
+        if aChar.moving:                
+            aChar.draw()
+        
         command = getCommand()
-
         aChar.update(command)
-        aChar.draw() 
           
 
     
@@ -98,21 +129,16 @@ class spritesheet(object):
                 for x in range(image_count)]
         return self.images_at(tups, colorkey)
 
-
-
-def getVertsOfTile(Cola, Fila): 
-    half = BOARDWIDTH*TILEW/2  
-    Y = -32 + (Cola + Fila) * 0.5 * TILEH + 64
-    X = half + (Cola*(0.5*TILEW)) - (Fila*(0.5*TILEW))
-    return X,Y
+#def getVertsOfTile(Cola, Fila):   
+#    Y = -32 + (Cola + Fila) * 0.5 * TILEH + 64
+#    X = HALF + (Cola*TILEW * 0.5) - (Fila*TILEW* 0.5)
+#   return X,Y
 
 def drawtile(tile, Col, Fila):
+    Y = (Col + Fila) * HTILEH + 32 - Camera[1]
+    X = HALF + (Col*HTILEW) - (Fila*HTILEW) - Camera[0]
 
-    x,y = getVertsOfTile(Col, Fila)
-    x,y = x - Camera[0], y - Camera[1]
-
-    if y + Camera[1] > Camera[1] - 100 and y + Camera[1] < Camera[1]+ WINDOWHEIGHT and x + Camera[0] > Camera[0] - 100 and x + Camera[0] < Camera[0]+ WINDOWWIDTH:
-        DISPLAYSURF.blit(tile, (x,y))
+    DISPLAYSURF.blit(tile, (X,Y))
 
 
 def readMap(filename):
@@ -126,6 +152,7 @@ def readMap(filename):
     
     readingLayer, readingData = False, False
     nLayers = -1
+    nRows = -1
     csv = []
     
     for nLinea in lineas:
@@ -161,18 +188,21 @@ def readMap(filename):
 
         if 'type=' in line and readingLayer:
             mapObj.layers.append((line[line.find('type='):].lstrip('type='),[]))
+            nRows = 0
             #mapObj.layers[nLayers][0] = line[line.find('type='):].lstrip('type=')
         
         if 'data=' in line:
             readingData = True
         
         if readingLayer and readingData and 'data=' not in line:
+            mapObj.layers[nLayers][1].append([])
             csv = line.rstrip(',').split(',')
             for id in csv:
                 trueId = int(id)  
                 x = ((trueId-1) % (mapObj.tilesetWidth / mapObj.tilew)) * mapObj.tilew
                 y = int((trueId-1) / (mapObj.tilesetWidth / mapObj.tilew)) * mapObj.tileh
-                mapObj.layers[nLayers][1].append((x,y))
+                mapObj.layers[nLayers][1][nRows].append((x,y))
+            nRows += 1
                 
     return mapObj
 
