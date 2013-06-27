@@ -19,7 +19,7 @@ HTILEW = 0.5 * TILEW
 
 def main():
 
-    global FPSCLOCK, DISPLAYSURF, BASICFONT, aSpriteSheet, unMapa, aCamera, tileList
+    global FPSCLOCK, DISPLAYSURF, BASICFONT, aSpriteSheet, unMapa, aCamera, tileList, Commands
         
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
@@ -40,23 +40,24 @@ def main():
     tileList = {}
     
     command = (0,0)   
-    
+    Commands = []
     aCamera = Camera('DYNAMIC', aChar)
     
     Collisionables = unMapa.getCollisionables()
     
     while command != QUIT:
         
-        aCamera.update(aChar)
+        #aCamera.update(aChar)
         
-        unMapa.draw(aCamera, aChar)
+        #unMapa.draw(aCamera, aChar)
         
-        if aChar.moving:                
-            aChar.draw()
+        #if aChar.moving:                
+        #    aChar.draw()
         
         command = getCommand()
-        aChar.update(command, Collisionables)
-          
+        
+        #aChar.update(command, Collisionables)
+        print command
         pygame.display.update()
         FPSCLOCK.tick(FPS)
         
@@ -64,10 +65,30 @@ def getCommand ():
         event = pygame.event.poll()
         
         if event.type == pygame.KEYUP:
-            return Key2Dir[event.key] , KEYUP
+            Commands.remove(Key2Dir[event.key])
         elif event.type == pygame.KEYDOWN:   
-            return Key2Dir[event.key] , KEYDOWN
-        return NONE, NONE 
+            Commands.append(Key2Dir[event.key])
+
+        if len(Commands) == 0:
+            return (0,0)
+        else:
+            Acum = (0,0)
+            for Command in Commands:
+                Acum = Acum[0] + Command[0], Acum[1] + Command[1]
+             
+            if abs(Acum[0]) > 1:
+                if Acum[0] == 2:
+                    Acum = 1 , Acum[1]
+                else:
+                    Acum = -1 , Acum[1]
+                    
+            if abs(Acum[1]) > 1:
+                if Acum[1] == 2:
+                    Acum = Acum[0] , 1
+                else:
+                    Acum = Acum[0] , -1
+            return Acum
+        
 
 class Camera(object):
     x = 0
@@ -137,11 +158,6 @@ class spritesheet(object):
         tups = [(rect[0]+rect[2]*x, rect[1], rect[2], rect[3])
                 for x in range(image_count)]
         return self.images_at(tups, colorkey)
-
-#def getVertsOfTile(Cola, Fila):   
-#    Y = -32 + (Cola + Fila) * 0.5 * TILEH + 64
-#    X = HALF + (Cola*TILEW * 0.5) - (Fila*TILEW* 0.5)
-#   return X,Y
 
 def drawtile(tile, Col, Fila):
     Y = (Col + Fila) * HTILEH + 32 - aCamera.y
